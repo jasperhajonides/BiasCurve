@@ -1,0 +1,168 @@
+---
+title: "BiasCurve"
+author: "Irene Echeverria Altuna"
+date: "03/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(CircStats)
+library(ggplot2)
+
+```
+
+This script creates a bias curve like the one shown in Myers et al (2017) - Figure 2.
+
+First, define a set of functions (from Matlab) in R.
+
+```{r}
+
+
+angle <- function(h) {
+  atan2(Im(h), Re(h))
+}
+# returns the phase angle in the interval [-π,π] for each element of a complex array h
+
+circ_dist <- function(x,y) {
+    angle(exp(1i*x)/exp(1i*y))
+}
+# returns the circular distance between two vectors x and y (in radians)
+
+circ_bini <- function(x,nbin,pbin){
+  
+  quantbeg <- seq(0-pbin/2,1-1/nbin-pbin/2,len = nbin) %% 1
+  quantend <- (quantbeg+pbin) %% 1
+  xbinbeg <- quantile(x, quantbeg, names = FALSE)
+  xbinend <- quantile(x, quantend, names = FALSE)
+  
+  ibin <- matrix(0,length(x),nbin)
+  
+  for(i in 1:nbin){
+    
+    if(quantbeg[i] < quantend[i]){
+      ibin[,i] <- x >= xbinbeg[i] & x <= xbinend[i]
+    } else{
+      ibin[,i] <- x >= xbinbeg[i] | x <= xbinend[i]
+    }
+    
+  }
+  
+  i <- ibin == 1
+  
+  return(i)
+  
+}
+
+# creates a matrix with trials as rows n of bins as columns with TRUE and FALSE values
+
+```
+
+
+Loop across participants 
+
+```{r}
+
+subjects = 1:2 # n of subjects
+nbin = 64 # number of bins
+pbin = 1/4 # number of trials in each bin
+conditions = c("random", "target") # conditions
+
+data <- data.frame("subnum", "cond", "responseOri", "targetOri", "distractorOri") # data frame with columns containing subject number, condition type (see conditions), reported orientation (0-180 degrees), target orientation (0-180 degrees), diestractor orientation (0-180 degrees)
+
+# create empty arrays
+biases <- array(0,dim= c(length(subjects),length(conditions),nbin))
+angmus <- array(0,dim= c(length(subjects),length(conditions),nbin))
+precs <- array(0,dim= c(length(subjects),length(conditions),nbin))
+
+for(c in 1:length(conditions)){
+
+  for(s in 1:length(subjects)){
+    
+    Response <- data$reportedOri[data$subnum == s]/90*pi
+    Target <- data$currentOri[datar$subnum == s]/90*pi
+    Distractor <- data_cleaner$prevOri[data$subnum == s]/90*pi
+    
+    angdif <- circ_dist(Distractor, Target)
+    rdif <- circ_dist(Response, Target)
+    
+    condidx <- which(data_cleaner$condition[data_cleaner$subnum == s] == conditions[c])
+    
+    #input arguments
+    x <- angdif[condidx] # should be in -pi to pi
+    
+    indices <- circ_bini(x, nbin, pbin)
+    
+    for(j in 1:nbin){
+      
+      biases[s,c,j] = circ.mean(rdif[condidx][indices[,j]])
+      angmus[s,c,j] = circ.mean(angdif[condidx][indices[,j]])
+      mrvl = circ.summary(rdif[condidx][indices[,j]])$rho # compute the mean resultant vector length
+      standardD = sqrt(-2*log(mrvl))
+      precs[s,c,j] = 1/standardD
+      
+    }
+  
+    
+  }
+  
+}
+
+
+
+```
+
+
+Create a data frame with which to plot bias curve
+
+```{r}
+
+curve_data <- NULL
+
+for(c in 1:length(conditions)){
+
+  for(s in 1:length(subjects)){
+    
+    bias <- biases[s,c,]
+    ii <- data.frame(bias)
+    
+    subangmus <- angmus[s,c,]
+    ii$angmus <- subangmus
+    
+    subprecs <- precs[s,c,]
+    ii$precs <- subprecs
+    
+    ii$subnum <- rep(s, nrow(ii))
+    ii$condition <- conditions[c]
+    ii$nr <- c(1:nrow(ii))
+    
+    curve_data <- rbind(curve_data, ii)
+    
+  }
+  
+}
+
+
+
+```
+
+Plot bias curve
+- a bias curve for each participant in different colours
+- a bias curve across all participants in black
+
+```{r}
+
+agg <- curve_data[curve_data$condition == "random",]
+
+ggplot(agg, aes(x=angmus, y=bias)) + 
+  geom_point(data=agg, aes(x=angmus, y=bias, color = factor(subnum))) +
+  geom_smooth(data=agg, aes(x=angmus, y=bias, color = factor(subnum))) +
+  geom_smooth(color = "black") +
+  ylab("Response Bias") +
+  xlab("pi") +
+  theme_classic()
+
+
+```
+
