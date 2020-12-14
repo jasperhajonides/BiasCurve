@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Dec  1 15:21:21 2020
+Computes circular bias in responses towards for secondary orientation
+here called 'distractors'
 
-@author: sammi
+@author: Sammi, Jasper (Dec 2020)
 """
 import numpy as np
 import scipy as sp
